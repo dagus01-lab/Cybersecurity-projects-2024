@@ -54,20 +54,25 @@ class TemperatureGraphDataset(Dataset):
     applies spatial subsetting, and converts each chunk into a spatio-temporal graph.
     Each graph's node features are the concatenation of temperature values and the NaN mask.
     """
-    def __init__(self, ds, var_name, temp_window, transform=None, pre_transform=None):
+    def __init__(self, ds, var_name, temp_window, rnd_offset=True):
         super(TemperatureGraphDataset, self).__init__()
         self.ds = ds
         self.var_name = var_name
         self.temp_window = temp_window
         self.chunk_size = ds[self.var_name].chunks[0][0]
+        self.rnd_offset = rnd_offset
         self.num_chunks = int(np.floor(ds[self.var_name].sizes['time'] / self.chunk_size))
     
     def len(self):
         return self.num_chunks
     
     def get(self, idx):
-        rnd_offset = random.randint(0, self.temp_window) if idx < self.num_chunks - 1 else 0
-        start = idx * self.temp_window + rnd_offset
+        if self.rnd_offset:
+            rnd_offset = random.randint(0, self.temp_window) if idx < self.temp_window - 1 else 0
+
+            start = idx * self.temp_window + rnd_offset
+        else:
+            start = idx
         end = start + self.temp_window
         try:
             chunk = self.ds[self.var_name].isel(time=slice(start, end))

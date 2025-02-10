@@ -2,9 +2,13 @@ import numpy as np
 import xarray as xr
 import random
 
-def fixed_bias(ds_time_slice, bias, main_var='Tb'):
+def fixed_bias(ds_time_slice, bias, start_index=5, main_var='Tb'):
     tmp_ds_time_slice = ds_time_slice.copy()
-    tmp_ds_time_slice[main_var] = tmp_ds_time_slice[main_var]+bias
+    num_time_steps = ds_time_slice['time'].shape[0]
+    increments = np.zeros(num_time_steps)
+    increments[start_index:] = bias
+    increments_da = xr.DataArray(increments, dims=['time'], coords={'time': ds_time_slice['time']})
+    tmp_ds_time_slice[main_var] = tmp_ds_time_slice[main_var]+increments_da
     return tmp_ds_time_slice
 
 def incrementing_bias(ds_time_slice, bias_rate, main_var='Tb'):
@@ -91,7 +95,6 @@ def replay_attack(ds_time_slice, replay_period, main_var='Tb'):
     
     tmp_ds_time_slice[main_var] = xr.DataArray(data.values, dims=data.dims, coords=data.coords)
     return tmp_ds_time_slice
-
 def backdoor_trigger(
     ds_time_slice, 
     trigger_strength=0.5,  # Amplitude of the trigger signal
@@ -99,14 +102,19 @@ def backdoor_trigger(
     trigger_duration=10,     # Number of time steps the trigger lasts
     main_var='Tb'
 ):
-    tmp_ds = ds_time_slice.copy()
-    trigger_signal = trigger_strength * np.sin(
-        2 * np.pi * np.arange(trigger_duration) / trigger_duration
-    )
-    trigger_signal = trigger_signal[:, np.newaxis, np.newaxis] 
-    tmp_ds[main_var][trigger_start:trigger_start+trigger_duration, :, :] += trigger_signal
-    
-    return tmp_ds
+    tmp_ds_time_slice = ds_time_slice.copy()
 
+    trigger_signal = trigger_strength * np.sin(2 * np.pi * np.arange(trigger_duration) / trigger_duration)
+
+    # Create an array of zeros with the same shape as ds_time_slice[main_var]
+    result = np.zeros_like(ds_time_slice[main_var])
+
+    result[trigger_start:trigger_start + trigger_duration, ...] = trigger_signal[:, np.newaxis, np.newaxis]
+
+    trigger_signal_da = xr.DataArray(result, dims=ds_time_slice[main_var].dims, coords=ds_time_slice[main_var].coords)
+
+    tmp_ds_time_slice[main_var] = tmp_ds_time_slice[main_var] + trigger_signal_da
+    
+    return tmp_ds_time_slice
 
 
